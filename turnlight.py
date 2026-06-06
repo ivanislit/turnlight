@@ -21,7 +21,7 @@ from classifier import ButtonStateClassifier, Classification
 
 
 APP_NAME = "Turnlight"
-APP_VERSION = "1.0.0"
+APP_VERSION = "0.9.0-beta"
 APP_MODEL_ID = "Turnlight.Local"
 APP_DIR = Path(__file__).resolve().parent
 CONFIG_PATH = APP_DIR / "config.json"
@@ -34,9 +34,13 @@ APP_WIDTH = 474
 APP_HEIGHT = 230
 APP_EXPANDED_HEIGHT = 626
 PERSONALIZATION_WIDTH = 416
-PERSONALIZATION_HEIGHT = 396
+PERSONALIZATION_HEIGHT = 580
 PERSONALIZATION_GAP = 6
 APP_PERSONALIZATION_WIDTH = APP_WIDTH + PERSONALIZATION_GAP + PERSONALIZATION_WIDTH
+DEFAULT_ALERT_TITLE = "Agent finished"
+DEFAULT_ALERT_SUBTITLE = "Your AI task is ready."
+ALERT_TITLE_MAX_CHARS = 32
+ALERT_SUBTITLE_MAX_CHARS = 48
 
 BG = "#020106"
 TITLE_BG = "#05040b"
@@ -77,6 +81,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "pause_after_alert": False,
     "window_position": None,
     "alert_color": None,
+    "alert_title": DEFAULT_ALERT_TITLE,
+    "alert_subtitle": DEFAULT_ALERT_SUBTITLE,
     "sound_enabled": True,
     "custom_sound_path": None,
     "alert_screen_mode": "multi",
@@ -467,6 +473,41 @@ def alert_color(config: dict[str, Any]) -> str:
     return str(value) if isinstance(value, str) and value.startswith("#") else ALERT_ORANGE
 
 
+def clean_alert_text(value: str, max_chars: int) -> str:
+    return value.replace("\r", " ").replace("\n", " ")[:max_chars]
+
+
+def alert_text_value(
+    config: dict[str, Any],
+    key: str,
+    default: str,
+    max_chars: int,
+    *,
+    allow_empty: bool = False,
+) -> str:
+    value = config.get(key)
+    if not isinstance(value, str):
+        return default
+    text = " ".join(clean_alert_text(value, max_chars).split())
+    if not text and not allow_empty:
+        return default
+    return text
+
+
+def alert_title(config: dict[str, Any]) -> str:
+    return alert_text_value(config, "alert_title", DEFAULT_ALERT_TITLE, ALERT_TITLE_MAX_CHARS)
+
+
+def alert_subtitle(config: dict[str, Any]) -> str:
+    return alert_text_value(
+        config,
+        "alert_subtitle",
+        DEFAULT_ALERT_SUBTITLE,
+        ALERT_SUBTITLE_MAX_CHARS,
+        allow_empty=True,
+    )
+
+
 def ensure_runtime_assets() -> None:
     required = [ICON_PNG_DIR / "app-icon.png", ICON_PNG_DIR / "settings.png", APP_ICON_PATH]
     if all(path.exists() for path in required):
@@ -489,9 +530,10 @@ class RoundedPanel(tk.Canvas):
         border: str = BORDER,
         border_width: int = 5,
         padding: int = 16,
+        canvas_bg: str = BG,
         **kwargs: Any,
     ) -> None:
-        super().__init__(parent, bg=BG, highlightthickness=0, bd=0, **kwargs)
+        super().__init__(parent, bg=canvas_bg, highlightthickness=0, bd=0, **kwargs)
         self.fill = bg
         self.radius = radius
         self.border = border
@@ -771,6 +813,9 @@ class TurnlightApp:
         self.personalization_open = False
         self.personalization_panel: RoundedPanel | None = None
         self.custom_sound_text: tk.StringVar | None = None
+        self.alert_title_text: tk.StringVar | None = None
+        self.alert_subtitle_text: tk.StringVar | None = None
+        self.updating_alert_text = False
         self.alert_pending = False
         self.alert_active = False
         self.alert_windows: list[tk.Toplevel] = []
@@ -879,6 +924,25 @@ class TurnlightApp:
         except Exception:
             logging.exception("Could not load icon %s at %s", name, size)
             return self.icon(name)
+
+    def icon_cropped_sized(self, name: str, size: int) -> ImageTk.PhotoImage | None:
+        key = f"{name}:cropped:{size}"
+        if key in self.icons:
+            return self.icons[key]
+        path = ICON_PNG_DIR / f"{name}.png"
+        if not path.exists():
+            return self.icon_sized(name, size)
+        try:
+            image = Image.open(path).convert("RGBA")
+            bbox = image.getbbox()
+            if bbox is not None:
+                image = image.crop(bbox)
+            image = image.resize((size, size), Image.Resampling.LANCZOS)
+            self.icons[key] = ImageTk.PhotoImage(image)
+            return self.icons[key]
+        except Exception:
+            logging.exception("Could not load cropped icon %s at %s", name, size)
+            return self.icon_sized(name, size)
 
     def _build_ui(self) -> None:
         self._build_titlebar()
@@ -1323,7 +1387,7 @@ class TurnlightApp:
             side="left",
             anchor="nw",
             padx=(PERSONALIZATION_GAP, 0),
-            pady=(186, 0),
+            pady=(0, 0),
         )
         self.apply_window_layout("settings_personalization")
 
@@ -1342,8 +1406,30 @@ class TurnlightApp:
         self._personalization_button(color_box.inner, "Bright", "bright-mode", lambda: self.set_alert_color("#ffffff"), 124, 34)
         self._personalization_button(color_box.inner, "Custom", "palette", self.choose_alert_color, 242, 34)
 
+        text_box = RoundedPanel(panel.inner, bg=PANEL_SOFT, radius=22, border=BORDER, border_width=5, padding=10, width=376, height=162)
+        text_box.place(x=6, y=220, width=376, height=162)
+        tk.Label(text_box.inner, text="Customize Alert Text", bg=PANEL_SOFT, fg=TEXT, font=("Segoe UI", 12, "bold")).place(x=6, y=0)
+        self.alert_title_text = tk.StringVar(value=alert_title(self.config))
+        self.alert_subtitle_text = tk.StringVar(value=alert_subtitle(self.config))
+        self.alert_title_text.trace_add("write", lambda *_args: self.save_alert_text_from_inputs())
+        self.alert_subtitle_text.trace_add("write", lambda *_args: self.save_alert_text_from_inputs())
+        self._alert_text_input(text_box.inner, "Title", self.alert_title_text, ALERT_TITLE_MAX_CHARS, 6, 30, 352)
+        self._alert_text_input(text_box.inner, "Subtitle", self.alert_subtitle_text, ALERT_SUBTITLE_MAX_CHARS, 6, 76, 352)
+        reset_text = tk.Label(
+            text_box.inner,
+            text="To reset to default alert text click here.",
+            bg=PANEL_SOFT,
+            fg=TEXT,
+            font=("Segoe UI", 8, "bold underline"),
+            cursor="hand2",
+        )
+        reset_text.place(x=6, y=124)
+        reset_text.bind("<Enter>", lambda _event: reset_text.configure(fg=HOVER_BORDER))
+        reset_text.bind("<Leave>", lambda _event: reset_text.configure(fg=MUTED))
+        reset_text.bind("<Button-1>", lambda _event: self.reset_alert_text())
+
         sound_box = RoundedPanel(panel.inner, bg=PANEL_SOFT, radius=22, border=BORDER, border_width=5, padding=10, width=376, height=140)
-        sound_box.place(x=6, y=220, width=376, height=140)
+        sound_box.place(x=6, y=398, width=376, height=140)
         tk.Label(sound_box.inner, text="Customize sound", bg=PANEL_SOFT, fg=TEXT, font=("Segoe UI", 12, "bold")).place(x=6, y=8)
         browse = RoundedButton(
             sound_box.inner,
@@ -1390,6 +1476,57 @@ class TurnlightApp:
         reset_link.bind("<Leave>", lambda _event: reset_link.configure(fg=MUTED))
         reset_link.bind("<Button-1>", lambda _event: self.reset_custom_sound())
 
+    def _alert_text_input(
+        self,
+        parent: tk.Widget,
+        label: str,
+        variable: tk.StringVar,
+        max_chars: int,
+        x: int,
+        y: int,
+        width: int,
+    ) -> tk.Entry:
+        tk.Label(
+            parent,
+            text=f"{label} ({max_chars} max)",
+            bg=PANEL_SOFT,
+            fg=MUTED,
+            font=("Segoe UI", 8, "bold"),
+        ).place(x=x, y=y)
+        field = RoundedPanel(
+            parent,
+            bg=CTA_CONFIG,
+            radius=18,
+            border=BORDER,
+            border_width=3,
+            padding=5,
+            canvas_bg=PANEL_SOFT,
+            width=width,
+            height=34,
+        )
+        field.place(x=x + 90, y=y - 6, width=width - 90, height=34)
+        validate = self.root.register(lambda proposed, limit=max_chars: self.validate_alert_text(proposed, limit))
+        entry = tk.Entry(
+            field.inner,
+            textvariable=variable,
+            bg=CTA_CONFIG,
+            fg=TEXT,
+            insertbackground=TEXT,
+            selectbackground=HOVER_BORDER,
+            selectforeground=BG,
+            relief="flat",
+            bd=0,
+            highlightthickness=0,
+            font=("Segoe UI", 10, "bold"),
+            validate="key",
+            validatecommand=(validate, "%P"),
+        )
+        entry.pack(fill="both", expand=True)
+        entry.bind("<FocusIn>", lambda event: self.select_alert_text_entry(event.widget))
+        entry.bind("<FocusOut>", lambda _event: self.normalize_alert_text_inputs())
+        entry.bind("<Button-1>", lambda event: self.select_alert_text_entry_on_click(event))
+        return entry
+
     def _personalization_button(
         self,
         parent: tk.Widget,
@@ -1424,6 +1561,68 @@ class TurnlightApp:
             self.personalization_panel.pack_forget()
         if animate and not self.shutdown.is_set():
             self.apply_window_layout("settings" if self.settings_open else "compact")
+
+    def validate_alert_text(self, proposed: str, max_chars: int) -> bool:
+        return len(proposed) <= max_chars and "\r" not in proposed and "\n" not in proposed
+
+    def select_alert_text_entry(self, widget: tk.Widget) -> None:
+        if not isinstance(widget, tk.Entry):
+            return
+        widget.after_idle(lambda: (widget.select_range(0, tk.END), widget.icursor(tk.END)))
+
+    def select_alert_text_entry_on_click(self, event: tk.Event) -> None:
+        widget = event.widget
+        if isinstance(widget, tk.Entry) and widget.focus_get() != widget:
+            self.select_alert_text_entry(widget)
+
+    def save_alert_text_from_inputs(self) -> None:
+        if self.updating_alert_text:
+            return
+        title = self.alert_title_text.get() if self.alert_title_text is not None else DEFAULT_ALERT_TITLE
+        subtitle = self.alert_subtitle_text.get() if self.alert_subtitle_text is not None else DEFAULT_ALERT_SUBTITLE
+        self.config["alert_title"] = clean_alert_text(title, ALERT_TITLE_MAX_CHARS)
+        self.config["alert_subtitle"] = clean_alert_text(subtitle, ALERT_SUBTITLE_MAX_CHARS)
+        save_config(self.config)
+
+    def normalize_alert_text_inputs(self) -> None:
+        if self.alert_title_text is None or self.alert_subtitle_text is None:
+            return
+        title = alert_text_value(
+            {"alert_title": self.alert_title_text.get()},
+            "alert_title",
+            DEFAULT_ALERT_TITLE,
+            ALERT_TITLE_MAX_CHARS,
+        )
+        subtitle = alert_text_value(
+            {"alert_subtitle": self.alert_subtitle_text.get()},
+            "alert_subtitle",
+            DEFAULT_ALERT_SUBTITLE,
+            ALERT_SUBTITLE_MAX_CHARS,
+            allow_empty=True,
+        )
+        self.updating_alert_text = True
+        try:
+            self.alert_title_text.set(title)
+            self.alert_subtitle_text.set(subtitle)
+        finally:
+            self.updating_alert_text = False
+        self.config["alert_title"] = title
+        self.config["alert_subtitle"] = subtitle
+        save_config(self.config)
+
+    def reset_alert_text(self) -> None:
+        self.config["alert_title"] = DEFAULT_ALERT_TITLE
+        self.config["alert_subtitle"] = DEFAULT_ALERT_SUBTITLE
+        save_config(self.config)
+        self.updating_alert_text = True
+        try:
+            if self.alert_title_text is not None:
+                self.alert_title_text.set(DEFAULT_ALERT_TITLE)
+            if self.alert_subtitle_text is not None:
+                self.alert_subtitle_text.set(DEFAULT_ALERT_SUBTITLE)
+        finally:
+            self.updating_alert_text = False
+        self.notify("Custom alert text reset to default.")
 
     def set_alert_color(self, color: str) -> None:
         self.config["alert_color"] = color
@@ -2013,7 +2212,7 @@ class TurnlightApp:
     def _build_alert_dialog(self) -> None:
         screen = primary_monitor()
         width = 520
-        height = 360
+        height = 324
         left = int(screen["left"] + (screen["width"] - width) / 2)
         top = int(screen["top"] + (screen["height"] - height) / 2)
 
@@ -2028,30 +2227,34 @@ class TurnlightApp:
         panel = RoundedPanel(dialog, bg=ALERT_CARD, radius=30, border=BORDER, border_width=6)
         panel.pack(fill="both", expand=True, padx=8, pady=8)
 
-        big_icon = self.icon_sized("app-icon", 64)
+        big_icon = self.icon_cropped_sized("app-icon", 80)
         if big_icon is not None:
-            tk.Label(panel.inner, image=big_icon, bg=ALERT_CARD).place(relx=0.5, y=28, anchor="n")
+            tk.Label(panel.inner, image=big_icon, bg=ALERT_CARD).place(relx=0.5, y=12, anchor="n")
+        title_text = alert_title(self.config)
+        subtitle_text = alert_subtitle(self.config)
+        title_font_size = 31
+        if len(title_text) > 28:
+            title_font_size = 25
+        elif len(title_text) > 20:
+            title_font_size = 28
         tk.Label(
             panel.inner,
-            text=APP_NAME,
-            bg=ALERT_CARD,
-            fg=MUTED,
-            font=("Segoe UI", 10, "bold"),
-        ).place(relx=0.5, y=100, anchor="n")
-        tk.Label(
-            panel.inner,
-            text="Agent finished",
+            text=title_text,
             bg=ALERT_CARD,
             fg=TEXT,
-            font=("Segoe UI", 31, "bold"),
-        ).place(relx=0.5, y=128, anchor="n")
+            font=("Segoe UI", title_font_size, "bold"),
+            wraplength=450,
+            justify="center",
+        ).place(relx=0.5, y=108, anchor="n")
         tk.Label(
             panel.inner,
-            text="Your AI task is ready.",
+            text=subtitle_text,
             bg=ALERT_CARD,
             fg=MUTED,
             font=("Segoe UI", 13, "bold"),
-        ).place(relx=0.5, y=186, anchor="n")
+            wraplength=430,
+            justify="center",
+        ).place(relx=0.5, y=164, anchor="n")
 
         button = RoundedButton(
             panel.inner,
@@ -2060,12 +2263,10 @@ class TurnlightApp:
             fill=ALERT_BUTTON,
             active=ALERT_BUTTON_HOVER,
             radius=20,
-            font_size=16,
+            font_size=21,
             canvas_bg=ALERT_CARD,
-            icon=self.icon_sized("check-circle", 34),
-            icon_position="left",
         )
-        button.place(relx=0.5, y=268, width=314, height=74, anchor="center")
+        button.place(relx=0.5, y=238, width=314, height=74, anchor="center")
 
         self.alert_windows.append(dialog)
         dialog.update_idletasks()
