@@ -35,6 +35,8 @@ Long-running AI agent sessions make it easy to lose focus by checking the screen
 
 It is built for AI agent power users, developers, designers, and anyone who runs long AI tasks while doing something else nearby.
 
+The original idea came from multi-monitor setups where the AI tool is not running on the main monitor. It can also be useful on a single-monitor setup if you often step away for brief moments while an agent is working.
+
 The practical goal is simple: maximize focus without losing the ability to keep working, planning future prompts, doing design work, or briefly stepping away from the desk while the agent runs.
 
 ## Status
