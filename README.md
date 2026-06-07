@@ -1,10 +1,24 @@
 # Turnlight
 
-Turnlight is a local Windows utility that watches a small screen region and shows a large visual alert when an AI agent appears to finish its turn.
+Turnlight is a local Windows utility that watches a small screen region and shows a large visual alert when an AI agent appears to be ready again.
 
-It is built for AI agent power users, developers, designers, and anyone who runs long AI tasks while doing something else nearby. Turnlight helps you stay focused without constantly checking whether the agent is done.
+The core logic is intentionally simple:
 
-Turnlight runs locally, does not use accounts, does not send data anywhere, and does not use external services. It does not call AI APIs, does not include telemetry, and is intentionally designed to stay that way.
+```text
+busy/stop state -> ready/send state -> alert
+```
+
+Turnlight has one job: detect a stable transition from busy to ready, then get your attention.
+
+![Turnlight main window](docs/images/main-window.png)
+
+## Why Turnlight Exists
+
+Long-running AI agent sessions make it easy to lose focus by checking the screen over and over. Turnlight lets you step away from constant monitoring without missing the moment when the agent is ready for the next prompt.
+
+It is built for AI agent power users, developers, designers, and anyone who runs long AI tasks while doing something else nearby.
+
+The practical goal is simple: maximize focus without losing the ability to keep working, planning future prompts, doing design work, or briefly stepping away from the desk while the agent runs.
 
 ## Status
 
@@ -32,6 +46,8 @@ Installer:
 Turnlight-0.9.0-beta-Setup.exe
 ```
 
+![Download Turnlight from GitHub Releases](docs/images/release-download.png)
+
 The installer does not require Python to be installed on the target PC.
 
 ## Windows SmartScreen And Antivirus
@@ -40,27 +56,7 @@ Turnlight is currently unsigned. Because of that, Windows SmartScreen or antivir
 
 This is common for new independent Windows apps, especially beta installers with low reputation. You are encouraged to inspect the source code before installing. The project is intentionally small and simple: it watches pixels from a screen region, compares them to local samples, and displays a local alert.
 
-## Install
-
-1. Open the GitHub Release.
-2. Download `Turnlight-0.9.0-beta-Setup.exe`.
-3. Run the installer.
-4. Keep the default install location unless you have a reason to change it.
-5. Keep the desktop shortcut enabled if you want quick access while testing.
-
-Default install location:
-
-```text
-%LocalAppData%\Programs\Turnlight
-```
-
-Local app data:
-
-```text
-%LocalAppData%\Turnlight
-```
-
-Turnlight stores config, logs, status, and samples locally in that data folder.
+See [SmartScreen and antivirus notes](docs/troubleshooting.md#windows-smartscreen-and-antivirus).
 
 ## First Setup
 
@@ -71,22 +67,20 @@ Turnlight stores config, logs, status, and samples locally in that data folder.
 5. Capture several `Busy` samples while the agent is working.
 6. Capture several `Ready` samples when the agent is ready for the next message.
 7. Capture `Ignored` samples for visual states that should not trigger an alert.
-8. Use `Test Alert` to confirm the alert is visible and the sound behavior is right for you.
+8. Use `Test Alert` to confirm the alert is visible and sound behavior is right for you.
 9. Leave Turnlight watching in the background.
+
+![Turnlight settings](docs/images/settings.png)
 
 Capture samples across the themes, windows, zoom levels, and hover states you actually use. Better samples make detection more reliable.
 
-## How It Works
+## Alert
 
-Turnlight keeps detection intentionally simple:
+When Turnlight detects the valid transition, it shows a large alert.
 
-```text
-busy_stop stable -> typing_arrow -> alert
-```
+![Turnlight alert](docs/images/alert.png)
 
-It watches for a stable busy state, then triggers once when that same region changes into a ready state.
-
-Turnlight was primarily tested in my personal Codex workflow. It can also work with other AI tools because the logic is based on local visual samples. In practice, the key is selecting the right region and capturing samples that match your actual UI.
+The alert can use the default system sound or a custom local WAV file.
 
 ## Personalization
 
@@ -98,7 +92,41 @@ Turnlight includes basic personalization:
 - Sound on/off
 - Multi-screen or primary-screen alert mode
 
+![Turnlight personalization](docs/images/personalization.png)
+
 The alert text and samples are stored locally.
+
+## How It Works
+
+Turnlight compares the pixels from the region you selected with local samples that you captured.
+
+The transition that matters is:
+
+```text
+busy_stop stable -> typing_arrow -> alert
+```
+
+It does not alert when the UI goes from ready to busy. It only alerts when a previously busy state becomes ready.
+
+Turnlight was primarily tested in my personal Codex workflow. It can also work with other AI tools because the logic is based on local visual samples. In practice, the key is selecting the right region and capturing samples that match your actual UI.
+
+## Local Data
+
+Default install location:
+
+```text
+%LocalAppData%\Programs\Turnlight
+```
+
+Local data folder:
+
+```text
+%LocalAppData%\Turnlight
+```
+
+Turnlight stores config, logs, status, and samples locally in that data folder.
+
+![Turnlight samples folder](docs/images/samples-folder.png)
 
 ## Privacy
 
@@ -114,25 +142,10 @@ Turnlight is local-first by design.
 
 Turnlight captures only the screen region you configure. Samples stay on your machine.
 
-## Screenshots
+## Documentation
 
-Screenshots and a visual walkthrough will be added after the beta installer has been validated on more machines.
-
-Planned:
-
-- Main window
-- Settings
-- Personalization
-- Alert overlay
-- Installer flow
-
-## Why I Built This
-
-I built Turnlight because I use AI agents for long work sessions and did not want to keep checking the screen every few minutes.
-
-The practical goal is to maximize focus without losing the ability to do other useful things while an agent is running: planning future prompts, doing design work, stepping away from the desk for a moment, or even doing simple stretching and breathing exercises near the workspace when possible.
-
-It is a small tool, but it solves a very real workflow problem for me.
+- [Visual walkthrough](docs/walkthrough.md)
+- [Troubleshooting](docs/troubleshooting.md)
 
 ## Limitations
 
