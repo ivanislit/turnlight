@@ -2,6 +2,23 @@
 
 This walkthrough shows the full beta flow: download, install, first setup, samples, personalization, and alert.
 
+## Video Guide
+
+Watch the short setup video first if you want to see the complete flow in motion:
+
+[![Turnlight install and first setup video](images/video-guide.png)](https://youtu.be/7Bi66-juU_4?si=NbXpIjXAjl7A94eM)
+
+[Turnlight v0.9.0-beta - Install and First Setup Guide](https://youtu.be/7Bi66-juU_4?si=NbXpIjXAjl7A94eM)
+
+Chapters:
+
+- `0:00` Downloading and running the installer
+- `0:56` Setting up Turnlight detection with local samples
+- `2:15` Compatibility with Always On Top (Microsoft PowerToys)
+- `2:25` Settings
+- `2:54` Personalization
+- `3:52` Thanks
+
 ## 1. Download The Installer
 
 Open the latest GitHub Release and download the installer from the Assets section.
@@ -59,6 +76,12 @@ The compact window shows:
 - Set Region
 - Start/Pause
 - Current detection state
+
+## Optional: Keep Turnlight Visible With PowerToys Always On Top
+
+Turnlight works well with Microsoft PowerToys Always On Top. This is especially useful in multi-monitor setups, where you may want Turnlight visible while working across screens.
+
+This workflow inspired the original idea: keeping an eye on long AI tasks without constantly returning to the main chat or editor window.
 
 ## 5. Set The Watched Region
 

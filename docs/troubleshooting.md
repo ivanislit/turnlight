@@ -6,6 +6,10 @@ Turnlight is currently unsigned. Windows SmartScreen or antivirus software may w
 
 This is common for new independent Windows apps, especially beta installers that do not have code-signing reputation yet.
 
+The setup video shows this flow visually:
+
+[Turnlight v0.9.0-beta - Install and First Setup Guide](https://youtu.be/7Bi66-juU_4?si=NbXpIjXAjl7A94eM)
+
 If Windows shows `Windows protected your PC`:
 
 1. Click `More info`.

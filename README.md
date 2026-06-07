@@ -12,6 +12,23 @@ Turnlight has one job: detect a stable transition from busy to ready, then get y
 
 ![Turnlight main window](docs/images/main-window.png)
 
+## Video Guide
+
+The easiest way to install and configure Turnlight for the first time is the short setup video:
+
+[![Turnlight install and first setup video](docs/images/video-guide.png)](https://youtu.be/7Bi66-juU_4?si=NbXpIjXAjl7A94eM)
+
+[Turnlight v0.9.0-beta - Install and First Setup Guide](https://youtu.be/7Bi66-juU_4?si=NbXpIjXAjl7A94eM)
+
+Chapters:
+
+- `0:00` Downloading and running the installer
+- `0:56` Setting up Turnlight detection with local samples
+- `2:15` Compatibility with Always On Top (Microsoft PowerToys)
+- `2:25` Settings
+- `2:54` Personalization
+- `3:52` Thanks
+
 ## Why Turnlight Exists
 
 Long-running AI agent sessions make it easy to lose focus by checking the screen over and over. Turnlight lets you step away from constant monitoring without missing the moment when the agent is ready for the next prompt.
@@ -59,6 +76,8 @@ This is common for new independent Windows apps, especially beta installers with
 See [SmartScreen and antivirus notes](docs/troubleshooting.md#windows-smartscreen-and-antivirus).
 
 ## First Setup
+
+If this is your first time using Turnlight, the [video guide](https://youtu.be/7Bi66-juU_4?si=NbXpIjXAjl7A94eM) is the easiest way to follow the setup visually.
 
 1. Open Turnlight.
 2. Click `Set Region`.
@@ -108,6 +127,8 @@ busy_stop stable -> typing_arrow -> alert
 
 It does not alert when the UI goes from ready to busy. It only alerts when a previously busy state becomes ready.
 
+The video guide shows this flow with a real AI chat window: set the region, capture local samples, then let Turnlight wait for the busy-to-ready transition.
+
 Turnlight was primarily tested in my personal Codex workflow. It can also work with other AI tools because the logic is based on local visual samples. In practice, the key is selecting the right region and capturing samples that match your actual UI.
 
 ## Local Data
@@ -144,6 +165,7 @@ Turnlight captures only the screen region you configure. Samples stay on your ma
 
 ## Documentation
 
+- [Video guide](https://youtu.be/7Bi66-juU_4?si=NbXpIjXAjl7A94eM)
 - [Visual walkthrough](docs/walkthrough.md)
 - [Troubleshooting](docs/troubleshooting.md)
 
