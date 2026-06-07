@@ -8,11 +8,13 @@ from typing import Iterable
 
 from PIL import Image, ImageChops, ImageOps, ImageStat
 
+from runtime_paths import user_data_dir
 
-APP_DIR = Path(__file__).resolve().parent
-SAMPLES_DIR = APP_DIR / "samples"
-DEBUG_STATE_IMAGE = APP_DIR / "debug-state-current.png"
-DEBUG_STATE_RESULT = APP_DIR / "debug-state-result.json"
+
+DATA_DIR = user_data_dir()
+SAMPLES_DIR = DATA_DIR / "samples"
+DEBUG_STATE_IMAGE = DATA_DIR / "debug-state-current.png"
+DEBUG_STATE_RESULT = DATA_DIR / "debug-state-result.json"
 
 KNOWN_STATES = ("busy_stop", "typing_arrow")
 IMAGE_SIZE = (64, 64)
@@ -88,8 +90,8 @@ def shape_classification(image: Image.Image) -> Classification | None:
     return None
 
 
-def sample_paths(state: str) -> list[Path]:
-    folder = SAMPLES_DIR / state
+def sample_paths(samples_dir: Path, state: str) -> list[Path]:
+    folder = samples_dir / state
     if not folder.exists():
         return []
     return sorted(path for path in folder.glob("*.png") if path.is_file())
@@ -121,7 +123,7 @@ class ButtonStateClassifier:
         loaded: dict[str, list[Image.Image]] = {}
         for state in KNOWN_STATES:
             loaded[state] = []
-            for path in sample_paths(state):
+            for path in sample_paths(self.samples_dir, state):
                 try:
                     loaded[state].append(normalize(Image.open(path)))
                 except Exception:
@@ -156,6 +158,7 @@ class ButtonStateClassifier:
         return Classification(best.state, best.score, tuple(scores), "match")
 
     def save_debug(self, image: Image.Image, classification: Classification) -> None:
+        DEBUG_STATE_IMAGE.parent.mkdir(parents=True, exist_ok=True)
         image.save(DEBUG_STATE_IMAGE)
         payload = {
             "state": classification.state,

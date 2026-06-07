@@ -8,10 +8,12 @@ from pathlib import Path
 import mss
 from PIL import Image
 
+from runtime_paths import user_data_dir
 
-APP_DIR = Path(__file__).resolve().parent
-CONFIG_PATH = APP_DIR / "config.json"
-SAMPLES_DIR = APP_DIR / "samples"
+
+DATA_DIR = user_data_dir()
+CONFIG_PATH = DATA_DIR / "config.json"
+SAMPLES_DIR = DATA_DIR / "samples"
 VALID_STATES = {"busy_stop", "typing_arrow", "ignored"}
 
 

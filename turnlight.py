@@ -18,16 +18,18 @@ from tkinter import colorchooser, filedialog, font as tkfont
 from PIL import Image, ImageTk
 
 from classifier import ButtonStateClassifier, Classification
+from runtime_paths import app_base_dir, ensure_user_data_dirs, user_data_dir
 
 
 APP_NAME = "Turnlight"
 APP_VERSION = "0.9.0-beta"
 APP_MODEL_ID = "Turnlight.Local"
-APP_DIR = Path(__file__).resolve().parent
-CONFIG_PATH = APP_DIR / "config.json"
-LOG_PATH = APP_DIR / "turnlight.log"
-STATUS_PATH = APP_DIR / "status.json"
-SAMPLES_DIR = APP_DIR / "samples"
+APP_DIR = app_base_dir()
+DATA_DIR = user_data_dir()
+CONFIG_PATH = DATA_DIR / "config.json"
+LOG_PATH = DATA_DIR / "turnlight.log"
+STATUS_PATH = DATA_DIR / "status.json"
+SAMPLES_DIR = DATA_DIR / "samples"
 ICON_PNG_DIR = APP_DIR / "assets" / "icons" / "png"
 APP_ICON_PATH = APP_DIR / "assets" / "app" / "turnlight.ico"
 APP_WIDTH = 474
@@ -453,6 +455,7 @@ def apply_rounded_window(hwnd: int, width: int, height: int, radius: int = 22) -
 
 
 def load_config() -> dict[str, Any]:
+    ensure_user_data_dirs()
     config = DEFAULT_CONFIG.copy()
     if CONFIG_PATH.exists():
         try:
@@ -465,6 +468,7 @@ def load_config() -> dict[str, Any]:
 
 
 def save_config(config: dict[str, Any]) -> None:
+    ensure_user_data_dirs()
     CONFIG_PATH.write_text(json.dumps(config, indent=2), encoding="utf-8")
 
 
@@ -838,6 +842,7 @@ class TurnlightApp:
         self.preview_photo: ImageTk.PhotoImage | None = None
         self.icons: dict[str, ImageTk.PhotoImage] = {}
         self.classifier = ButtonStateClassifier(
+            samples_dir=SAMPLES_DIR,
             threshold=float(self.config.get("classifier_threshold", 0.78)),
             margin=float(self.config.get("classifier_margin", 0.035)),
         )
@@ -2056,7 +2061,7 @@ class TurnlightApp:
     def save_debug_capture(self) -> None:
         try:
             current = self.capture_region()
-            current.save(APP_DIR / "debug-current.png")
+            current.save(DATA_DIR / "debug-current.png")
             classification = self.classifier.classify(current)
             self.classifier.save_debug(current, classification)
             with self.lock:
@@ -2336,6 +2341,7 @@ class TurnlightApp:
 
 
 def main() -> None:
+    ensure_user_data_dirs()
     handler = RotatingFileHandler(LOG_PATH, maxBytes=1_000_000, backupCount=3, encoding="utf-8")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", handlers=[handler])
     set_dpi_awareness()
