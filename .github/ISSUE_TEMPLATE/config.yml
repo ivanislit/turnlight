@@ -1,0 +1,14 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Install and first setup video
+    url: https://youtu.be/7Bi66-juU_4?si=NbXpIjXAjl7A94eM
+    about: Watch the short visual guide before opening a setup issue.
+  - name: Visual walkthrough
+    url: https://github.com/ivanislit/turnlight/blob/main/docs/walkthrough.md
+    about: Step-by-step installation and first setup documentation.
+  - name: Troubleshooting
+    url: https://github.com/ivanislit/turnlight/blob/main/docs/troubleshooting.md
+    about: SmartScreen, samples, detection, data paths, and uninstall notes.
+  - name: README
+    url: https://github.com/ivanislit/turnlight#readme
+    about: Main project overview, download link, privacy notes, and limitations.

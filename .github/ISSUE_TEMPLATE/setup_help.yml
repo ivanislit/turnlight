@@ -1,0 +1,64 @@
+name: Setup help
+description: Ask for help with installation, SmartScreen, samples, alert, or sound.
+title: "[Setup]: "
+labels: ["setup-help"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For first setup, please check the video guide and walkthrough first:
+        - Video: https://youtu.be/7Bi66-juU_4?si=NbXpIjXAjl7A94eM
+        - Walkthrough: https://github.com/ivanislit/turnlight/blob/main/docs/walkthrough.md
+        - Troubleshooting: https://github.com/ivanislit/turnlight/blob/main/docs/troubleshooting.md
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: What do you need help with?
+      options:
+        - Installer or SmartScreen
+        - Set Region
+        - Capturing samples
+        - Alert display
+        - Sound or custom WAV
+        - Multi-monitor behavior
+        - Other setup issue
+    validations:
+      required: true
+
+  - type: input
+    id: windows-version
+    attributes:
+      label: Windows version
+      placeholder: Windows 11
+    validations:
+      required: true
+
+  - type: input
+    id: monitor-setup
+    attributes:
+      label: Monitor setup
+      placeholder: 1 monitor, 2 monitors, laptop + external monitor, etc.
+    validations:
+      required: true
+
+  - type: input
+    id: ai-tool
+    attributes:
+      label: AI tool or app being watched
+      placeholder: Codex, ChatGPT, Cursor, Windsurf, Claude, other
+
+  - type: textarea
+    id: details
+    attributes:
+      label: What happened?
+      description: Describe what you tried and where you got stuck.
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or notes
+      description: Add screenshots if useful. Avoid sharing private screen content.
+

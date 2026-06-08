@@ -1,0 +1,45 @@
+name: Feedback
+description: Share workflow feedback, compatibility notes, or feature ideas.
+title: "[Feedback]: "
+labels: ["feedback"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Feedback is welcome, especially real workflow notes from long-running AI agent sessions.
+
+  - type: dropdown
+    id: feedback-type
+    attributes:
+      label: Feedback type
+      options:
+        - Workflow note
+        - Compatibility with another AI tool
+        - Detection improvement idea
+        - Installer or setup feedback
+        - UI or personalization idea
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: ai-tool
+    attributes:
+      label: AI tool or app
+      placeholder: Codex, ChatGPT, Cursor, Windsurf, Claude, other
+
+  - type: input
+    id: setup
+    attributes:
+      label: Setup
+      description: Include Windows version and monitor setup if relevant.
+      placeholder: Windows 11, 2 monitors
+
+  - type: textarea
+    id: feedback
+    attributes:
+      label: Feedback
+      description: Describe what worked, what did not, or what would make Turnlight more useful.
+    validations:
+      required: true
+

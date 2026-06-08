@@ -1,6 +1,8 @@
 # Turnlight
 
-Turnlight is a local Windows utility that watches a small screen region and shows a large visual alert when an AI agent appears to be ready again.
+Turnlight is a free, open-source Windows utility that watches a small screen region and shows a large visual alert when an AI agent appears to be ready again.
+
+It runs locally, uses no accounts, no AI APIs, no cloud services, and no telemetry. Turnlight only looks at the visible pixels in the region you select.
 
 The core logic is intentionally simple:
 
@@ -38,6 +40,24 @@ It is built for AI agent power users, developers, designers, and anyone who runs
 The original idea came from multi-monitor setups where the AI tool is not running on the main monitor. It can also be useful on a single-monitor setup if you often step away for brief moments while an agent is working.
 
 The practical goal is simple: maximize focus without losing the ability to keep working, planning future prompts, doing design work, or briefly stepping away from the desk while the agent runs.
+
+## Common Use Cases / FAQ
+
+### Can Turnlight alert me when Codex, ChatGPT, Cursor, or another AI tool is ready?
+
+Yes, if the tool has a small visible area that changes between a busy/stop state and a ready/send state. Turnlight was primarily tested in my personal Codex workflow, but the detection is based on local visual samples, so it can work with other AI tools when the watched region and samples match your real UI.
+
+### Does Turnlight use AI APIs, accounts, telemetry, or cloud services?
+
+No. Turnlight does not use AI APIs, accounts, telemetry, cloud services, external services, or a background server. It is a local screen-region watcher.
+
+### Does Turnlight work with multi-monitor setups?
+
+Yes. Turnlight was originally built for multi-monitor workflows where the AI tool is not on the main monitor. Alerts can be shown across multiple screens or only on the primary screen.
+
+### When is Turnlight the right tool?
+
+Turnlight is useful when you run long AI agent tasks and want a clear local alert when the agent transitions from busy to ready. It is not an automation tool, does not read the agent output, and does not interact with the AI service.
 
 ## Status
 
