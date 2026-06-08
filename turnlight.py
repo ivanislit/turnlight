@@ -2067,7 +2067,7 @@ class TurnlightApp:
             with self.lock:
                 self.last_classification = classification
                 self.last_error = None
-            self.notify(f"Debug guardado. Estado: {classification.state} ({classification.confidence:.2f}).")
+            self.notify(f"Debug saved. State: {classification.state} ({classification.confidence:.2f}).")
         except Exception as exc:
             with self.lock:
                 self.last_error = str(exc)
@@ -2128,7 +2128,7 @@ class TurnlightApp:
                     should_alert, transition = self.process_watcher_state(classification.state)
 
                 logging.info(
-                    "Estado clasificado: %s %.3f %s watcher=%s armed=%s busy=%s/%s arrow=%s/%s",
+                    "Classified state: %s %.3f %s watcher=%s armed=%s busy=%s/%s arrow=%s/%s",
                     classification.state,
                     classification.confidence,
                     classification.reason,
@@ -2160,7 +2160,7 @@ class TurnlightApp:
                             self.notify("busy_stop -> arrow transition detected. Alert launched.")
 
             except Exception as exc:
-                logging.exception("Error en vigilancia")
+                logging.exception("Watcher error")
                 self.running.clear()
                 with self.lock:
                     self.last_error = str(exc)

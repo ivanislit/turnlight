@@ -47,7 +47,7 @@ Turnlight does not alert just because it sees a ready state. It alerts when it f
 
 ## Turnlight Alerts Too Often
 
-Capture more `Ignored` samples for states that look similar to ready but should not trigger.
+Capture more `Ignored` samples for states that look similar to ready or busy but should not trigger. Ignored samples are treated as negative examples.
 
 Also capture more `Busy` and `Ready` samples across your real UI states:
 

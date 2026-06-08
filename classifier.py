@@ -17,6 +17,7 @@ DEBUG_STATE_IMAGE = DATA_DIR / "debug-state-current.png"
 DEBUG_STATE_RESULT = DATA_DIR / "debug-state-result.json"
 
 KNOWN_STATES = ("busy_stop", "typing_arrow")
+SAMPLE_STATES = ("busy_stop", "typing_arrow", "ignored")
 IMAGE_SIZE = (64, 64)
 
 
@@ -121,7 +122,7 @@ class ButtonStateClassifier:
 
     def reload(self) -> None:
         loaded: dict[str, list[Image.Image]] = {}
-        for state in KNOWN_STATES:
+        for state in SAMPLE_STATES:
             loaded[state] = []
             for path in sample_paths(self.samples_dir, state):
                 try:
@@ -131,13 +132,9 @@ class ButtonStateClassifier:
         self.templates = loaded
 
     def classify(self, image: Image.Image) -> Classification:
-        shape_result = shape_classification(image)
-        if shape_result is not None:
-            return shape_result
-
         current = normalize(image)
         scores: list[StateScore] = []
-        for state in KNOWN_STATES:
+        for state in SAMPLE_STATES:
             templates = self.templates.get(state, [])
             state_score = top_average(similarity(current, template) for template in templates)
             scores.append(StateScore(state=state, score=state_score, samples=len(templates)))
@@ -145,6 +142,18 @@ class ButtonStateClassifier:
         scores.sort(key=lambda item: item.score, reverse=True)
         best = scores[0] if scores else StateScore("unknown", 0.0, 0)
         second = scores[1] if len(scores) > 1 else StateScore("unknown", 0.0, 0)
+
+        if best.state == "ignored" and best.samples > 0 and best.score >= self.threshold:
+            return Classification("unknown", best.score, tuple(scores), "ignored match")
+
+        if best.state in KNOWN_STATES and best.samples > 0 and best.score >= self.threshold:
+            if best.score - second.score < self.margin:
+                return Classification("unknown", best.score, tuple(scores), "low margin")
+            return Classification(best.state, best.score, tuple(scores), "match")
+
+        shape_result = shape_classification(image)
+        if shape_result is not None:
+            return shape_result
 
         if best.samples == 0:
             return Classification("unknown", 0.0, tuple(scores), "no samples to compare")

@@ -93,7 +93,7 @@ If this is your first time using Turnlight, the [video guide](https://youtu.be/7
 
 ![Turnlight settings](docs/images/settings.png)
 
-Capture samples across the themes, windows, zoom levels, and hover states you actually use. Better samples make detection more reliable.
+Capture samples across the themes, windows, zoom levels, and hover states you actually use. `Ignored` samples act as negative examples for states that look close to ready or busy but should not trigger. Better samples make detection more reliable.
 
 ## Alert
 
