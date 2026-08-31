@@ -1,8 +1,16 @@
+param(
+    [string] $Name = "Turnlight"
+)
+
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
 $desktop = [Environment]::GetFolderPath("DesktopDirectory")
-$shortcutPath = Join-Path $desktop "Turnlight.lnk"
+$shortcutName = [IO.Path]::GetFileNameWithoutExtension($Name)
+if ([string]::IsNullOrWhiteSpace($shortcutName)) {
+    $shortcutName = "Turnlight"
+}
+$shortcutPath = Join-Path $desktop "$shortcutName.lnk"
 $target = Join-Path $PSScriptRoot ".venv\Scripts\pythonw.exe"
 $script = Join-Path $PSScriptRoot "turnlight.py"
 $icon = Join-Path $PSScriptRoot "assets\app\turnlight.ico"

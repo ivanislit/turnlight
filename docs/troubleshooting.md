@@ -57,6 +57,12 @@ Also capture more `Busy` and `Ready` samples across your real UI states:
 - Different windows
 - Different zoom levels
 
+## False Alert After Windows Task View
+
+Turnlight includes a defensive suppression guard for Windows Task View and similar shell transitions.
+
+If Task View, a mouse shortcut, or a window-switching overlay briefly changes the watched region, Turnlight suppresses alerts for a few seconds and resets the busy-to-ready transition state. After that, it must see a new stable busy state before it can alert again.
+
 ## Where Data Is Stored
 
 Installed app:

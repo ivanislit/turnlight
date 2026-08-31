@@ -15,7 +15,7 @@ from typing import Any, Callable
 import mss
 import tkinter as tk
 from tkinter import colorchooser, filedialog, font as tkfont
-from PIL import Image, ImageTk
+from PIL import Image, ImageChops, ImageStat, ImageTk
 
 from classifier import ButtonStateClassifier, Classification
 from runtime_paths import app_base_dir, ensure_user_data_dirs, user_data_dir
@@ -80,6 +80,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "busy_stable_samples": 3,
     "arrow_transition_samples": 1,
     "cooldown_seconds": 5,
+    "system_view_suppression_seconds": 5,
+    "visual_interruption_threshold": 0.42,
     "pause_after_alert": False,
     "window_position": None,
     "alert_color": None,
@@ -390,6 +392,60 @@ def cursor_position() -> tuple[int, int]:
     return int(point.x), int(point.y)
 
 
+def key_is_down(virtual_key: int) -> bool:
+    try:
+        return bool(ctypes.windll.user32.GetAsyncKeyState(virtual_key) & 0x8000)
+    except Exception:
+        return False
+
+
+def task_view_hotkey_is_down() -> bool:
+    vk_tab = 0x09
+    vk_lwin = 0x5B
+    vk_rwin = 0x5C
+    return key_is_down(vk_tab) and (key_is_down(vk_lwin) or key_is_down(vk_rwin))
+
+
+def foreground_window_info() -> dict[str, str | int] | None:
+    try:
+        user32 = ctypes.windll.user32
+        hwnd = int(user32.GetForegroundWindow())
+        if not hwnd:
+            return None
+
+        class_buffer = ctypes.create_unicode_buffer(256)
+        title_buffer = ctypes.create_unicode_buffer(512)
+        user32.GetClassNameW(hwnd, class_buffer, len(class_buffer))
+        user32.GetWindowTextW(hwnd, title_buffer, len(title_buffer))
+        return {
+            "hwnd": hwnd,
+            "class_name": class_buffer.value,
+            "title": title_buffer.value,
+        }
+    except Exception:
+        logging.exception("Could not inspect foreground window")
+        return None
+
+
+def task_view_foreground_reason() -> str | None:
+    info = foreground_window_info()
+    if info is None:
+        return None
+
+    class_name = str(info.get("class_name", ""))
+    title = str(info.get("title", ""))
+    haystack = f"{class_name} {title}".lower()
+    markers = (
+        "multitaskingview",
+        "task view",
+        "vista de tareas",
+        "xamlexplorerhostislandwindow",
+    )
+    if any(marker in haystack for marker in markers):
+        return f"task_view_foreground class={class_name!r} title={title!r}"
+    return None
+
+
 def clamp(value: int, minimum: int, maximum: int) -> int:
     return max(minimum, min(maximum, value))
 
@@ -479,6 +535,13 @@ def alert_color(config: dict[str, Any]) -> str:
 
 def clean_alert_text(value: str, max_chars: int) -> str:
     return value.replace("\r", " ").replace("\n", " ")[:max_chars]
+
+
+def image_delta(a: Image.Image, b: Image.Image) -> float:
+    first = a.convert("L").resize((32, 32), Image.Resampling.BILINEAR)
+    second = b.convert("L").resize((32, 32), Image.Resampling.BILINEAR)
+    diff = ImageChops.difference(first, second)
+    return ImageStat.Stat(diff).mean[0] / 255.0
 
 
 def alert_text_value(
@@ -825,6 +888,9 @@ class TurnlightApp:
         self.alert_windows: list[tk.Toplevel] = []
         self.alert_sound_stop: threading.Event | None = None
         self.alert_sound_thread: threading.Thread | None = None
+        self.alert_suppressed_until = 0.0
+        self.alert_suppression_reason: str | None = None
+        self.last_visual_delta = 0.0
 
         self.running = threading.Event()
         self.shutdown = threading.Event()
@@ -1825,6 +1891,7 @@ class TurnlightApp:
 
     def write_status(self) -> None:
         with self.lock:
+            now = time.time()
             status = {
                 "running": self.running.is_set(),
                 "region": self.config.get("region"),
@@ -1845,6 +1912,10 @@ class TurnlightApp:
                 "arrow_transition_samples": self.config["arrow_transition_samples"],
                 "last_sample_at": self.last_sample_at,
                 "last_alert_at": self.last_alert_at,
+                "alert_suppressed": now < self.alert_suppressed_until,
+                "alert_suppressed_until": self.alert_suppressed_until,
+                "alert_suppression_reason": self.alert_suppression_reason,
+                "last_visual_delta": self.last_visual_delta,
                 "last_error": self.last_error,
             }
         try:
@@ -1929,11 +2000,7 @@ class TurnlightApp:
             save_config(self.config)
             with self.lock:
                 self.last_classification = None
-                self.stable_count = 0
-                self.busy_streak = 0
-                self.arrow_streak = 0
-                self.armed_after_busy = False
-                self.last_watcher_state = "unknown"
+                self.reset_transition_state()
                 self.last_error = None
             self.write_status()
             self.notify(
@@ -2004,11 +2071,7 @@ class TurnlightApp:
             return
 
         with self.lock:
-            self.stable_count = 0
-            self.busy_streak = 0
-            self.arrow_streak = 0
-            self.armed_after_busy = False
-            self.last_watcher_state = "unknown"
+            self.reset_transition_state()
             self.last_classification = None
             self.last_error = None
         self.classifier.reload()
@@ -2025,11 +2088,7 @@ class TurnlightApp:
     def pause_watching(self) -> None:
         self.running.clear()
         with self.lock:
-            self.stable_count = 0
-            self.busy_streak = 0
-            self.arrow_streak = 0
-            self.armed_after_busy = False
-            self.last_watcher_state = "unknown"
+            self.reset_transition_state()
         self.write_status()
         self.notify("Paused.")
 
@@ -2076,6 +2135,57 @@ class TurnlightApp:
         finally:
             self.write_status()
 
+    def reset_transition_state(self) -> None:
+        self.stable_count = 0
+        self.busy_streak = 0
+        self.arrow_streak = 0
+        self.armed_after_busy = False
+        self.last_watcher_state = "unknown"
+
+    def transition_snapshot(self) -> dict[str, Any]:
+        return {
+            "watcher_state": self.last_watcher_state,
+            "armed_after_busy": self.armed_after_busy,
+            "busy_streak": self.busy_streak,
+            "arrow_streak": self.arrow_streak,
+            "stable_count": self.stable_count,
+        }
+
+    def suppress_alerts_for(self, seconds: float, reason: str) -> None:
+        until = time.time() + max(0.0, seconds)
+        if until <= self.alert_suppressed_until and self.alert_suppression_reason == reason:
+            return
+        self.alert_suppressed_until = until
+        self.alert_suppression_reason = reason
+        self.reset_transition_state()
+        logging.info("Suppressing alerts for %.1fs: %s", seconds, reason)
+
+    def alert_is_suppressed(self) -> bool:
+        if time.time() < self.alert_suppressed_until:
+            return True
+        if self.alert_suppression_reason is not None:
+            self.alert_suppression_reason = None
+        return False
+
+    def system_view_reason(self) -> str | None:
+        if task_view_hotkey_is_down():
+            return "task_view_hotkey"
+        return task_view_foreground_reason()
+
+    def visual_interruption_reason(self, current: Image.Image, classification: Classification) -> str | None:
+        if not self.armed_after_busy or self.last_current is None or classification.state != "typing_arrow":
+            return None
+        try:
+            delta = image_delta(self.last_current, current)
+        except Exception:
+            logging.exception("Could not calculate visual delta")
+            return None
+        self.last_visual_delta = delta
+        threshold = float(self.config.get("visual_interruption_threshold", 0.42))
+        if delta >= threshold:
+            return f"visual_interruption delta={delta:.3f}"
+        return None
+
     def process_watcher_state(self, state: str) -> tuple[bool, dict[str, Any]]:
         should_alert = False
         if state == "busy_stop":
@@ -2101,13 +2211,7 @@ class TurnlightApp:
             self.stable_count = 0
             self.last_watcher_state = state
 
-        return should_alert, {
-            "watcher_state": self.last_watcher_state,
-            "armed_after_busy": self.armed_after_busy,
-            "busy_streak": self.busy_streak,
-            "arrow_streak": self.arrow_streak,
-            "stable_count": self.stable_count,
-        }
+        return should_alert, self.transition_snapshot()
 
     def _watch_loop(self) -> None:
         while not self.shutdown.is_set():
@@ -2116,19 +2220,35 @@ class TurnlightApp:
                 continue
 
             try:
+                system_reason = self.system_view_reason()
+                if system_reason is not None:
+                    with self.lock:
+                        self.suppress_alerts_for(float(self.config.get("system_view_suppression_seconds", 5)), system_reason)
+                    self.write_status()
+                    time.sleep(max(0.1, int(self.config["interval_ms"]) / 1000.0))
+                    continue
+
                 current = self.capture_region()
                 classification = self.classifier.classify(current)
                 should_alert = False
 
                 with self.lock:
+                    visual_reason = self.visual_interruption_reason(current, classification)
                     self.last_current = current
                     self.last_classification = classification
                     self.last_sample_at = time.time()
                     self.last_error = None
-                    should_alert, transition = self.process_watcher_state(classification.state)
+                    if visual_reason is not None:
+                        self.suppress_alerts_for(
+                            float(self.config.get("system_view_suppression_seconds", 5)),
+                            visual_reason,
+                        )
+                        transition = self.transition_snapshot()
+                    else:
+                        should_alert, transition = self.process_watcher_state(classification.state)
 
                 logging.info(
-                    "Classified state: %s %.3f %s watcher=%s armed=%s busy=%s/%s arrow=%s/%s",
+                    "Classified state: %s %.3f %s watcher=%s armed=%s busy=%s/%s arrow=%s/%s suppressed=%s reason=%s delta=%.3f",
                     classification.state,
                     classification.confidence,
                     classification.reason,
@@ -2138,19 +2258,26 @@ class TurnlightApp:
                     self.config["busy_stable_samples"],
                     transition["arrow_streak"],
                     self.config["arrow_transition_samples"],
+                    time.time() < self.alert_suppressed_until,
+                    self.alert_suppression_reason,
+                    self.last_visual_delta,
                 )
 
                 self.write_status()
 
                 if should_alert:
                     now = time.time()
-                    if now - self.last_alert_at >= float(self.config["cooldown_seconds"]):
+                    with self.lock:
+                        suppressed = self.alert_is_suppressed()
+                        if suppressed:
+                            self.reset_transition_state()
+                            logging.info("Alert suppressed before launch: %s", self.alert_suppression_reason)
+                    if suppressed:
+                        self.write_status()
+                    elif now - self.last_alert_at >= float(self.config["cooldown_seconds"]):
                         self.last_alert_at = now
                         with self.lock:
-                            self.stable_count = 0
-                            self.busy_streak = 0
-                            self.arrow_streak = 0
-                            self.armed_after_busy = False
+                            self.reset_transition_state()
                             self.last_watcher_state = "typing_arrow"
                         self.launch_alert()
                         if bool(self.config["pause_after_alert"]):
@@ -2164,11 +2291,7 @@ class TurnlightApp:
                 self.running.clear()
                 with self.lock:
                     self.last_error = str(exc)
-                    self.stable_count = 0
-                    self.busy_streak = 0
-                    self.arrow_streak = 0
-                    self.armed_after_busy = False
-                    self.last_watcher_state = "unknown"
+                    self.reset_transition_state()
                 self.write_status()
                 self.notify("Watching error. Check turnlight.log.")
 
