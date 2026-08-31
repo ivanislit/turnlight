@@ -22,7 +22,7 @@ from runtime_paths import app_base_dir, ensure_user_data_dirs, user_data_dir
 
 
 APP_NAME = "Turnlight"
-APP_VERSION = "0.9.0-beta"
+APP_VERSION = "0.9.1-beta"
 APP_MODEL_ID = "Turnlight.Local"
 APP_DIR = app_base_dir()
 DATA_DIR = user_data_dir()

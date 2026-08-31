@@ -12,8 +12,8 @@ body:
     id: version
     attributes:
       label: Turnlight version
-      description: Example: v0.9.0-beta
-      placeholder: v0.9.0-beta
+      description: Example: v0.9.1-beta
+      placeholder: v0.9.1-beta
     validations:
       required: true
 
@@ -87,4 +87,3 @@ body:
     attributes:
       label: Extra details
       description: Add screenshots, logs, or notes if useful. Avoid sharing private screen content.
-

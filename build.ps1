@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
-$version = "0.9.0-beta"
+$version = "0.9.1-beta"
 $python = ".\.venv\Scripts\python.exe"
 $pyInstaller = ".\.venv\Scripts\pyinstaller.exe"
 $innoScript = ".\installer\turnlight.iss"

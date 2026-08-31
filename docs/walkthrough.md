@@ -26,7 +26,7 @@ Open the latest GitHub Release and download the installer from the Assets sectio
 Installer:
 
 ```text
-Turnlight-0.9.0-beta-Setup.exe
+Turnlight-0.9.1-beta-Setup.exe
 ```
 
 ![Download Turnlight from GitHub Releases](images/release-download.png)

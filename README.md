@@ -61,7 +61,7 @@ Turnlight is useful when you run long AI agent tasks and want a clear local aler
 
 ## Status
 
-Current version: `v0.9.0-beta`
+Current version: `v0.9.1-beta`
 
 Turnlight is a stable Windows beta for daily use, but it is still being validated on more Windows setups before a `v1.0.0` release.
 
@@ -77,12 +77,12 @@ Expected but not fully verified yet:
 
 Download the latest beta installer from GitHub Releases:
 
-[Turnlight v0.9.0-beta](https://github.com/ivanislit/turnlight/releases/tag/v0.9.0-beta)
+[Turnlight v0.9.1-beta](https://github.com/ivanislit/turnlight/releases/tag/v0.9.1-beta)
 
 Installer:
 
 ```text
-Turnlight-0.9.0-beta-Setup.exe
+Turnlight-0.9.1-beta-Setup.exe
 ```
 
 ![Download Turnlight from GitHub Releases](docs/images/release-download.png)

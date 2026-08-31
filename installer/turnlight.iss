@@ -1,5 +1,5 @@
 #define MyAppName "Turnlight"
-#define MyAppVersion "0.9.0-beta"
+#define MyAppVersion "0.9.1-beta"
 #define MyAppPublisher "ivanislit"
 #define MyAppExeName "Turnlight.exe"
 
