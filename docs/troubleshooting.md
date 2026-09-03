@@ -45,6 +45,8 @@ busy_stop stable -> typing_arrow -> alert
 
 Turnlight does not alert just because it sees a ready state. It alerts when it first sees a stable busy state and then sees the ready state.
 
+Turnlight also ignores short busy periods by default. If the agent returns to ready before `Min Busy` has elapsed, no alert is shown. Change `Min Busy` in Settings if you want a shorter or longer threshold.
+
 ## Turnlight Alerts Too Often
 
 Capture more `Ignored` samples for states that look similar to ready or busy but should not trigger. Ignored samples are treated as negative examples.

@@ -26,7 +26,7 @@ Open the latest GitHub Release and download the installer from the Assets sectio
 Installer:
 
 ```text
-Turnlight-0.9.1-beta-Setup.exe
+Turnlight-0.9.2-beta-Setup.exe
 ```
 
 ![Download Turnlight from GitHub Releases](images/release-download.png)
@@ -99,6 +99,10 @@ Open Settings and capture local samples:
 
 ![Turnlight settings](images/settings.png)
 
+Use `Min Busy Time` to ignore short agent runs before showing an alert. The default is 45 seconds.
+
+![Turnlight minimum busy time setting](images/min-busy-time.png)
+
 Turnlight's core logic is:
 
 ```text
@@ -140,7 +144,7 @@ Click `Test Alert` in Settings.
 
 ![Turnlight alert](images/alert.png)
 
-If sound is enabled, the sound loops while the alert is active. Click `Done` to close it.
+If sound is enabled, the sound loops while the alert is active. Click `Done`, press `Escape`, or use any keyboard key or mouse click to close it.
 
 ## 10. Let It Watch
 
@@ -152,4 +156,4 @@ When it sees:
 busy -> ready
 ```
 
-it shows the alert.
+it shows the alert, as long as the busy period lasted at least the configured `Min Busy` time. The default is 45 seconds.

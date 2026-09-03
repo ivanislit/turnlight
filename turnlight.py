@@ -22,7 +22,7 @@ from runtime_paths import app_base_dir, ensure_user_data_dirs, user_data_dir
 
 
 APP_NAME = "Turnlight"
-APP_VERSION = "0.9.1-beta"
+APP_VERSION = "0.9.2-beta"
 APP_MODEL_ID = "Turnlight.Local"
 APP_DIR = app_base_dir()
 DATA_DIR = user_data_dir()
@@ -34,7 +34,8 @@ ICON_PNG_DIR = APP_DIR / "assets" / "icons" / "png"
 APP_ICON_PATH = APP_DIR / "assets" / "app" / "turnlight.ico"
 APP_WIDTH = 474
 APP_HEIGHT = 230
-APP_EXPANDED_HEIGHT = 626
+APP_EXPANDED_HEIGHT = 682
+SETTINGS_PANEL_HEIGHT = 446
 PERSONALIZATION_WIDTH = 416
 PERSONALIZATION_HEIGHT = 580
 PERSONALIZATION_GAP = 6
@@ -43,6 +44,8 @@ DEFAULT_ALERT_TITLE = "Agent finished"
 DEFAULT_ALERT_SUBTITLE = "Your AI task is ready."
 ALERT_TITLE_MAX_CHARS = 32
 ALERT_SUBTITLE_MAX_CHARS = 48
+ALERT_INPUT_DISMISS_GRACE_SECONDS = 0.25
+ALERT_INPUT_DISMISS_POLL_SECONDS = 0.03
 
 BG = "#020106"
 TITLE_BG = "#05040b"
@@ -80,6 +83,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "busy_stable_samples": 3,
     "arrow_transition_samples": 1,
     "cooldown_seconds": 5,
+    "minimum_busy_seconds_before_alert": 45,
     "system_view_suppression_seconds": 5,
     "visual_interruption_threshold": 0.42,
     "pause_after_alert": False,
@@ -406,6 +410,20 @@ def task_view_hotkey_is_down() -> bool:
     return key_is_down(vk_tab) and (key_is_down(vk_lwin) or key_is_down(vk_rwin))
 
 
+def pressed_keyboard_keys() -> set[int]:
+    mouse_buttons = set(range(0x01, 0x07))
+    return {
+        virtual_key
+        for virtual_key in range(0x08, 0xFF)
+        if virtual_key not in mouse_buttons and key_is_down(virtual_key)
+    }
+
+
+def pressed_mouse_buttons() -> set[int]:
+    mouse_buttons = {0x01, 0x02, 0x04, 0x05, 0x06}
+    return {virtual_key for virtual_key in mouse_buttons if key_is_down(virtual_key)}
+
+
 def foreground_window_info() -> dict[str, str | int] | None:
     try:
         user32 = ctypes.windll.user32
@@ -662,6 +680,7 @@ class RoundedButton(tk.Canvas):
         icon_y_offset: int = 0,
         text_y_offset: int = 0,
         text_line_spacing: int = 0,
+        compact_left_group: bool = False,
     ) -> None:
         super().__init__(parent, bg=canvas_bg, highlightthickness=0, bd=0, width=116, height=74, cursor="hand2")
         self.text = text
@@ -680,6 +699,7 @@ class RoundedButton(tk.Canvas):
         self.icon_y_offset = icon_y_offset
         self.text_y_offset = text_y_offset
         self.text_line_spacing = text_line_spacing
+        self.compact_left_group = compact_left_group
         self.bind("<Configure>", self._draw)
         self.bind("<Enter>", self._enter)
         self.bind("<Leave>", self._leave)
@@ -707,8 +727,28 @@ class RoundedButton(tk.Canvas):
             self.create_image(w // 2, h // 2, image=self.icon)
             return
         if self.icon is not None and self.icon_position == "left":
-            gap = 0
             icon_slot = 24
+            gap = 10 if self.compact_left_group else 0
+            if self.compact_left_group:
+                font_spec = ("Segoe UI", self.font_size, "bold")
+                font = tkfont.Font(font=font_spec)
+                text_width = min(max(font.measure(self.text), 64), max(64, w - 72))
+                group_width = icon_slot + gap + text_width
+                start_x = max(inset + 12, (w - group_width) // 2)
+                icon_x = start_x + icon_slot // 2
+                text_x = start_x + icon_slot + gap
+                self.create_image(icon_x + self.icon_x_offset, h // 2, image=self.icon)
+                self.create_text(
+                    text_x,
+                    h // 2,
+                    text=self.text,
+                    fill=text_fill,
+                    font=font_spec,
+                    width=text_width,
+                    justify="left",
+                    anchor="w",
+                )
+                return
             text_width = max(82, w - 92)
             group_width = icon_slot + gap + text_width
             start_x = max(18, (w - group_width) // 2)
@@ -888,6 +928,8 @@ class TurnlightApp:
         self.alert_windows: list[tk.Toplevel] = []
         self.alert_sound_stop: threading.Event | None = None
         self.alert_sound_thread: threading.Thread | None = None
+        self.alert_input_dismiss_stop: threading.Event | None = None
+        self.alert_input_dismiss_thread: threading.Thread | None = None
         self.alert_suppressed_until = 0.0
         self.alert_suppression_reason: str | None = None
         self.last_visual_delta = 0.0
@@ -901,6 +943,8 @@ class TurnlightApp:
         self.busy_streak = 0
         self.arrow_streak = 0
         self.armed_after_busy = False
+        self.busy_started_at: float | None = None
+        self.last_busy_elapsed_seconds = 0.0
         self.last_watcher_state = "unknown"
         self.last_classification: Classification | None = None
         self.last_error: str | None = None
@@ -1238,7 +1282,7 @@ class TurnlightApp:
                 padding=10,
                 width=APP_WIDTH - 12,
             )
-            self.settings_panel.configure(height=390)
+            self.settings_panel.configure(height=SETTINGS_PANEL_HEIGHT)
             self.settings_inner = self.settings_panel.inner
             self.build_settings_contents(self.settings_inner)
         self.settings_open = True
@@ -1360,6 +1404,19 @@ class TurnlightApp:
             font_size=11,
         )
         self._settings_button(parent, "Reset Samples", "folder", self.reset_samples, 228, 312, width=204, height=46, icon_size=24, font_size=11)
+        self.min_busy_button = self._settings_button(
+            parent,
+            self.minimum_busy_time_label(),
+            "bell",
+            self.toggle_minimum_busy_time,
+            12,
+            368,
+            width=420,
+            height=46,
+            icon_size=24,
+            font_size=11,
+            compact_left_group=True,
+        )
 
     def _settings_button(
         self,
@@ -1375,6 +1432,7 @@ class TurnlightApp:
         icon_size: int = 21,
         icon_position: str = "left",
         font_size: int = 9,
+        compact_left_group: bool = False,
     ) -> RoundedButton:
         button = RoundedButton(
             parent,
@@ -1387,6 +1445,7 @@ class TurnlightApp:
             icon=self.icon_sized(icon_name, icon_size),
             icon_position=icon_position,
             canvas_bg=PANEL,
+            compact_left_group=compact_left_group,
         )
         button.place(x=x, y=y, width=width, height=height)
         return button
@@ -1741,6 +1800,36 @@ class TurnlightApp:
             return "Saved sound is missing. Default system sound will be used."
         return "Using default system sound."
 
+    def minimum_busy_seconds_before_alert(self) -> int:
+        try:
+            seconds = int(self.config.get("minimum_busy_seconds_before_alert", 45))
+        except (TypeError, ValueError):
+            seconds = 45
+        if seconds < 0:
+            return 45
+        return seconds
+
+    def minimum_busy_time_label(self) -> str:
+        seconds = self.minimum_busy_seconds_before_alert()
+        value = "Off" if seconds <= 0 else f"{seconds}s"
+        return f"Min Busy Time: {value}"
+
+    def toggle_minimum_busy_time(self) -> None:
+        values = [0, 15, 30, 45, 60, 120]
+        current = self.minimum_busy_seconds_before_alert()
+        try:
+            index = values.index(current)
+        except ValueError:
+            index = values.index(45)
+        next_value = values[(index + 1) % len(values)]
+        self.config["minimum_busy_seconds_before_alert"] = next_value
+        save_config(self.config)
+        if hasattr(self, "min_busy_button"):
+            self.min_busy_button.text = self.minimum_busy_time_label()
+            self.min_busy_button._draw()
+        label = "off" if next_value <= 0 else f"{next_value} seconds"
+        self.notify(f"Minimum busy time before alert: {label}.")
+
     def toggle_sound(self) -> None:
         enabled = not bool(self.config.get("sound_enabled", True))
         self.config["sound_enabled"] = enabled
@@ -1910,6 +1999,9 @@ class TurnlightApp:
                 "stable_samples": self.config["stable_samples"],
                 "busy_stable_samples": self.config["busy_stable_samples"],
                 "arrow_transition_samples": self.config["arrow_transition_samples"],
+                "minimum_busy_seconds_before_alert": self.minimum_busy_seconds_before_alert(),
+                "busy_started_at": self.busy_started_at,
+                "busy_elapsed_seconds": self.last_busy_elapsed_seconds,
                 "last_sample_at": self.last_sample_at,
                 "last_alert_at": self.last_alert_at,
                 "alert_suppressed": now < self.alert_suppressed_until,
@@ -2140,6 +2232,8 @@ class TurnlightApp:
         self.busy_streak = 0
         self.arrow_streak = 0
         self.armed_after_busy = False
+        self.busy_started_at = None
+        self.last_busy_elapsed_seconds = 0.0
         self.last_watcher_state = "unknown"
 
     def transition_snapshot(self) -> dict[str, Any]:
@@ -2149,6 +2243,9 @@ class TurnlightApp:
             "busy_streak": self.busy_streak,
             "arrow_streak": self.arrow_streak,
             "stable_count": self.stable_count,
+            "busy_started_at": self.busy_started_at,
+            "busy_elapsed_seconds": self.last_busy_elapsed_seconds,
+            "minimum_busy_seconds_before_alert": self.minimum_busy_seconds_before_alert(),
         }
 
     def suppress_alerts_for(self, seconds: float, reason: str) -> None:
@@ -2189,9 +2286,12 @@ class TurnlightApp:
     def process_watcher_state(self, state: str) -> tuple[bool, dict[str, Any]]:
         should_alert = False
         if state == "busy_stop":
+            if self.busy_started_at is None:
+                self.busy_started_at = time.time()
             self.busy_streak += 1
             self.arrow_streak = 0
             self.stable_count = self.busy_streak
+            self.last_busy_elapsed_seconds = time.time() - self.busy_started_at
             self.last_watcher_state = "busy_stop"
             if self.busy_streak >= int(self.config["busy_stable_samples"]):
                 self.armed_after_busy = True
@@ -2200,15 +2300,29 @@ class TurnlightApp:
             if self.armed_after_busy:
                 self.arrow_streak += 1
                 self.stable_count = self.arrow_streak
-                should_alert = self.arrow_streak >= int(self.config["arrow_transition_samples"])
+                if self.busy_started_at is not None:
+                    self.last_busy_elapsed_seconds = time.time() - self.busy_started_at
+                candidate_alert = self.arrow_streak >= int(self.config["arrow_transition_samples"])
+                minimum_busy_seconds = self.minimum_busy_seconds_before_alert()
+                if candidate_alert and minimum_busy_seconds > 0 and self.last_busy_elapsed_seconds < minimum_busy_seconds:
+                    elapsed = self.last_busy_elapsed_seconds
+                    logging.info(
+                        "Skipping alert after short busy period: %.1fs < %ss",
+                        elapsed,
+                        minimum_busy_seconds,
+                    )
+                    self.reset_transition_state()
+                    self.last_busy_elapsed_seconds = elapsed
+                else:
+                    should_alert = candidate_alert
             else:
                 self.arrow_streak = 0
                 self.stable_count = 0
+                self.busy_started_at = None
+                self.last_busy_elapsed_seconds = 0.0
             self.last_watcher_state = "typing_arrow"
         else:
-            self.busy_streak = 0
-            self.arrow_streak = 0
-            self.stable_count = 0
+            self.reset_transition_state()
             self.last_watcher_state = state
 
         return should_alert, self.transition_snapshot()
@@ -2320,6 +2434,7 @@ class TurnlightApp:
                 overlay.geometry(
                     f"{monitor['width']}x{monitor['height']}{monitor['left']:+d}{monitor['top']:+d}"
                 )
+                overlay.bind("<KeyPress>", lambda _event: self.close_alert_overlay())
                 overlay.bind("<Escape>", lambda _event: self.close_alert_overlay())
                 overlay.update_idletasks()
                 hwnd = get_toplevel_hwnd(overlay)
@@ -2331,6 +2446,7 @@ class TurnlightApp:
             self._build_alert_dialog()
             if bool(self.config.get("sound_enabled", True)):
                 self.start_alert_sound_loop()
+            self.start_alert_input_dismiss_watcher()
             self.notify("Alert overlay launched.")
         except Exception:
             logging.exception("Could not launch alert overlay")
@@ -2349,6 +2465,7 @@ class TurnlightApp:
         dialog.configure(bg=BG)
         dialog.attributes("-topmost", True)
         dialog.geometry(f"{width}x{height}{left:+d}{top:+d}")
+        dialog.bind("<KeyPress>", lambda _event: self.close_alert_overlay())
         dialog.bind("<Escape>", lambda _event: self.close_alert_overlay())
         dialog.bind("<Return>", lambda _event: self.close_alert_overlay())
 
@@ -2405,6 +2522,7 @@ class TurnlightApp:
         dialog.focus_force()
 
     def close_alert_overlay(self) -> None:
+        self.stop_alert_input_dismiss_watcher()
         self.stop_alert_sound_loop()
         for window in list(self.alert_windows):
             try:
@@ -2417,6 +2535,47 @@ class TurnlightApp:
             self.alert_active = False
             self.alert_pending = False
         self.notify("Alert closed.")
+
+    def start_alert_input_dismiss_watcher(self) -> None:
+        self.stop_alert_input_dismiss_watcher()
+        stop_event = threading.Event()
+        self.alert_input_dismiss_stop = stop_event
+        self.alert_input_dismiss_thread = threading.Thread(
+            target=self._alert_input_dismiss_loop,
+            args=(stop_event,),
+            daemon=True,
+        )
+        self.alert_input_dismiss_thread.start()
+
+    def stop_alert_input_dismiss_watcher(self) -> None:
+        if self.alert_input_dismiss_stop is not None:
+            self.alert_input_dismiss_stop.set()
+        self.alert_input_dismiss_stop = None
+        self.alert_input_dismiss_thread = None
+
+    def _alert_input_dismiss_loop(self, stop_event: threading.Event) -> None:
+        initial_keys = pressed_keyboard_keys()
+        initial_buttons = pressed_mouse_buttons()
+        deadline = time.time() + ALERT_INPUT_DISMISS_GRACE_SECONDS
+        while not stop_event.is_set() and not self.shutdown.is_set():
+            time.sleep(ALERT_INPUT_DISMISS_POLL_SECONDS)
+            current_keys = pressed_keyboard_keys()
+            current_buttons = pressed_mouse_buttons()
+            if time.time() < deadline:
+                initial_keys |= current_keys
+                initial_buttons |= current_buttons
+                continue
+            new_keys = current_keys - initial_keys
+            new_buttons = current_buttons - initial_buttons
+            if new_keys or new_buttons:
+                logging.info("Alert dismissed by global input: keys=%s buttons=%s", sorted(new_keys), sorted(new_buttons))
+                try:
+                    self.root.after(0, self.close_alert_overlay)
+                except tk.TclError:
+                    pass
+                return
+            initial_keys &= current_keys
+            initial_buttons &= current_buttons
 
     def start_alert_sound_loop(self) -> None:
         self.stop_alert_sound_loop()
